@@ -4,16 +4,12 @@ var csurf = require('csurf');
 var express = require('express');
 var extend = require('xtend');
 var forms = require('forms');
-var User = require('./models');
 var mongoose = require('mongoose');
+var User = require('./models'); 
 
 var profileForm = forms.create({
     givenName: forms.fields.string({ required: true }),
     surname: forms.fields.string({ required: true }),
-    streetAddress: forms.fields.string(),
-    city: forms.fields.string(),
-    state: forms.fields.string(),
-    zip: forms.fields.string()
 });
 
 function renderForm(req, res, locals) {
@@ -21,65 +17,49 @@ function renderForm(req, res, locals) {
         title: 'My Profile',
         csrfToken: req.csrfToken(),
         givenName: req.user.givenName,
-        surname: req.user.surname,
-        streetAddress: req.user.customData.streetAddress,
-        city: req.user.customData.city,
-        state: req.user.customData.state,
-        zip: req.user.customData.zip
+        surname: req.user.surname,        
     }, locals || {}));
 }
 
 module.exports = function profile() {
 
     var router = express.Router();
-		router.use(cookieParser());
-		router.use(bodyParser.urlencoded({ extended: true }));
-		router.use(csurf({ cookie: true }));
+        router.use(cookieParser());
+        router.use(bodyParser.urlencoded({ extended: true }));
+        router.use(csurf({ cookie: true }));
 
-		router.all('/', function(req, res) {
-            profileForm.handle(req, {
-                success: function(form) {
-                    req.user.givenName = form.data.givenName;
-                    req.user.surname = form.data.surname;
-                    req.user.customData.streetAddress = form.data.streetAddress;
-                    req.user.customData.city = form.data.city;
-                    req.user.customData.state = form.data.state;
-                    req.user.customData.zip = form.data.zip;
-
+        router.all('/', function(req, res) {
+        profileForm.handle(req, {
+        success: function(form) {
+            req.user.givenName = form.data.givenName;
+            req.user.surname = form.data.surname;            
             var user = new User();
-            var address = new Address();
-                address.givenName = req.user.givenName;
-                address.surname = req.user.surname;
-                address.save(function(err) {
+                user.givenName = req.user.givenName;
+                user.surname = req.user.surname;
+                user.address =req.user.address;
+
+                user.save(function(err) {
                     if (err) {
-                        console.log(err);
+                        if (err.developerMessage){
+                            console.error(err);
+                         }
+                        renderForm(req, res, {
+                            errors: [{
+                                error: err.userMessage ||
+                                err.message || String(err)
+                            }]
+                        });
+                    } else {
+                        renderForm(req, res, {
+                            saved: true
+                        });
                     }
-                    res.json('Address added to DB');
                 });
-            req.user.customData.save();
-            req.user.save(function(err) {
-                if (err) {
-                    if (err.developerMessage){
-                        console.error(err);
-                    }
-                    renderForm(req, res, {
-                        errors: [{
-                            error: err.userMessage ||
-                            err.message || String(err)
-                        }]
-                    });
-                } else {
-                    renderForm(req, res, {
-                        saved: true
-                    });
-                }
-            });
-        },
-        empty: function() {
-            renderForm(req, res);
-        }
+            },
+            empty: function() {
+                renderForm(req, res);
+            }
+        });
     });
-});
-		
     return router;
 };
